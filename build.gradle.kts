@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "org.nevertouchgrass"
-version = "0.0.4"
+version = "0.0.5"
 
 
 tasks.bootJar {
@@ -35,10 +35,16 @@ publishing {
             from(components["java"])
             groupId = "org.nevertouchgrass"
             artifactId = "SpringFX"
-            this.version = "0.0.4"
+            this.version = project.version.toString()
         }
     }
 }
+
+tasks.jar {
+    archiveBaseName.set("SpringFX")
+    archiveVersion.set(project.version.toString())
+}
+
 
 configurations {
     compileOnly {
