@@ -7,7 +7,16 @@ plugins {
 }
 
 group = "org.nevertouchgrass"
-version = "0.0.2"
+version = "0.0.3"
+
+tasks.bootJar {
+    enabled = false
+}
+
+tasks.jar {
+    enabled = true
+}
+
 
 java {
     toolchain {
