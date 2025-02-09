@@ -3,10 +3,11 @@ plugins {
     id("org.springframework.boot") version "3.4.2"
     id("io.spring.dependency-management") version "1.1.7"
     id("org.openjfx.javafxplugin") version "0.0.13"
+    id("maven-publish")
 }
 
 group = "org.nevertouchgrass"
-version = "0.0.1"
+version = "0.0.2"
 
 java {
     toolchain {
