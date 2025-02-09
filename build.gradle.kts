@@ -7,7 +7,8 @@ plugins {
 }
 
 group = "org.nevertouchgrass"
-version = "0.0.3"
+version = "0.0.4"
+
 
 tasks.bootJar {
     enabled = false
@@ -26,6 +27,17 @@ java {
 javafx {
     version = "21"
     modules = listOf("javafx.controls", "javafx.fxml")
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
+            groupId = "org.nevertouchgrass"
+            artifactId = "SpringFX"
+            this.version = "0.0.4"
+        }
+    }
 }
 
 configurations {
