@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "org.nevertouchgrass"
-version = "0.0.5"
+version = "0.0.6"
 
 
 tasks.bootJar {
@@ -43,6 +43,7 @@ publishing {
 tasks.jar {
     archiveBaseName.set("SpringFX")
     archiveVersion.set(project.version.toString())
+    archiveClassifier.set("")
 }
 
 
