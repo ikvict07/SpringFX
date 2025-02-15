@@ -1,1 +1,2 @@
 org.nevertouchgrass.springfx.configuration.FXMLBeanFactoryPostProcessor
+org.nevertouchgrass.springfx.configuration.SpringFXConfiguration

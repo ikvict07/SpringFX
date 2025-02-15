@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "project.fxml-location",
+      "type": "java.lang.String",
+      "description": "Location of the FXML file. (from resources).",
+      "sourceType": "org.nevertouchgrass.springfx.configuration.SpringFXConfigurationProperties"
+    }
+  ]
+}
