@@ -14,6 +14,7 @@ import org.springframework.boot.context.properties.bind.BindResult;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.cglib.proxy.Enhancer;
 import org.springframework.cglib.proxy.MethodInterceptor;
+import org.springframework.cglib.proxy.MethodProxy;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.EnvironmentAware;
@@ -24,6 +25,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -71,38 +73,12 @@ public class FXMLBeanFactoryPostProcessor implements BeanFactoryPostProcessor, A
         Enhancer enhancer = new Enhancer();
         enhancer.setSuperclass(Parent.class);
         enhancer.setUseCache(false);
-
         enhancer.setInterfaces(new Class[]{FXMLAware.class});
-
-        enhancer.setCallback((MethodInterceptor) (obj, method, args, proxy) -> {
-            FXMLAware fxmlAware = (FXMLAware) obj;
-
-            switch (method.getName()) {
-                case "initialize" -> {
-                    Parent loaded = loadFxml(fxmlAware.getFxmlName());
-                    copyProperties((Parent) obj, loaded);
-                    return null;
-                }
-                case "toString" -> {
-                    return "Dynamic " + className;
-                }
-                case "getFxmlName" -> {
-                    return fxmlAware.getFxmlName();
-                }
-                case "setFxmlName" -> {
-                    fxmlAware.setFxmlName((String) args[0]);
-                    return null;
-                }
-                default -> {
-                    return proxy.invokeSuper(obj, args);
-                }
-            }
-        });
-
         enhancer.setNamingPolicy((prefix, source, key, names) -> className);
 
         return (Class<? extends Parent>) enhancer.createClass();
     }
+
 
     @SneakyThrows
     private Parent loadFxml(String fxmlName) {
