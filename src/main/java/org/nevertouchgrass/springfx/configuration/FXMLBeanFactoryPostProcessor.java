@@ -46,6 +46,7 @@ public class FXMLBeanFactoryPostProcessor implements BeanFactoryPostProcessor, A
             BeanDefinition beanDefinition = BeanDefinitionBuilder
                     .genericBeanDefinition(Parent.class, () -> loadFxml(fxmlName))
                     .setScope(BeanDefinition.SCOPE_SINGLETON)
+                    .setLazyInit(true)
                     .getBeanDefinition();
 
             registry.registerBeanDefinition(beanName, beanDefinition);

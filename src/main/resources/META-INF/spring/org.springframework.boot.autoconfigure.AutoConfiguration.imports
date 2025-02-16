@@ -1,2 +1,4 @@
 org.nevertouchgrass.springfx.configuration.FXMLBeanFactoryPostProcessor
 org.nevertouchgrass.springfx.configuration.SpringFXConfiguration
+org.nevertouchgrass.springfx.configuration.ConstraintsAnnotationProcessor
+org.nevertouchgrass.springfx.service.AnchorPaneConstraintsService
