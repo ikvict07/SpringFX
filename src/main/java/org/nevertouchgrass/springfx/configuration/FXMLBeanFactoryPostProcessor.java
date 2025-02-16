@@ -12,6 +12,8 @@ import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.bind.BindResult;
 import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.cglib.proxy.Enhancer;
+import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.EnvironmentAware;
@@ -27,11 +29,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static org.springframework.util.StringUtils.capitalize;
+
 @Component
 @EnableConfigurationProperties(SpringFXConfigurationProperties.class)
 public class FXMLBeanFactoryPostProcessor implements BeanFactoryPostProcessor, ApplicationContextAware, EnvironmentAware {
 
-    private SpringFXConfigurationProperties projectConfigurationProperties;
+    private SpringFXConfigurationProperties configurationProperties;
     private ApplicationContext applicationContext;
 
     @Override
@@ -41,40 +45,92 @@ public class FXMLBeanFactoryPostProcessor implements BeanFactoryPostProcessor, A
         }
 
         getFxmlNames().forEach(fxmlName -> {
-            String beanName = fxmlName + "Parent";
+            try {
+                String className = capitalize(fxmlName) + "Parent";
+                String beanName = fxmlName + "Parent";
 
-            BeanDefinition beanDefinition = BeanDefinitionBuilder
-                    .genericBeanDefinition(Parent.class, () -> loadFxml(fxmlName))
-                    .setScope(BeanDefinition.SCOPE_SINGLETON)
-                    .getBeanDefinition();
+                Class<? extends Parent> dynamicClass = createNamedDynamicClass(className);
 
-            registry.registerBeanDefinition(beanName, beanDefinition);
+                BeanDefinition beanDefinition = BeanDefinitionBuilder
+                        .genericBeanDefinition(dynamicClass)
+                        .setScope(BeanDefinition.SCOPE_SINGLETON)
+                        .setInitMethodName("initialize")
+                        .addPropertyValue("fxmlName", fxmlName)
+                        .getBeanDefinition();
+
+                registry.registerBeanDefinition(beanName, beanDefinition);
+            } catch (Exception e) {
+                throw new IllegalStateException("Error creating dynamic subclass for " + fxmlName, e);
+            }
         });
+    }
+
+
+    @SuppressWarnings("unchecked")
+    private Class<? extends Parent> createNamedDynamicClass(String className) {
+        Enhancer enhancer = new Enhancer();
+        enhancer.setSuperclass(Parent.class);
+        enhancer.setUseCache(false);
+
+        enhancer.setInterfaces(new Class[]{FXMLAware.class});
+
+        enhancer.setCallback((MethodInterceptor) (obj, method, args, proxy) -> {
+            FXMLAware fxmlAware = (FXMLAware) obj;
+
+            switch (method.getName()) {
+                case "initialize" -> {
+                    Parent loaded = loadFxml(fxmlAware.getFxmlName());
+                    copyProperties((Parent) obj, loaded);
+                    return null;
+                }
+                case "toString" -> {
+                    return "Dynamic " + className;
+                }
+                case "getFxmlName" -> {
+                    return fxmlAware.getFxmlName();
+                }
+                case "setFxmlName" -> {
+                    fxmlAware.setFxmlName((String) args[0]);
+                    return null;
+                }
+                default -> {
+                    return proxy.invokeSuper(obj, args);
+                }
+            }
+        });
+
+        enhancer.setNamingPolicy((prefix, source, key, names) -> className);
+
+        return (Class<? extends Parent>) enhancer.createClass();
     }
 
     @SneakyThrows
     private Parent loadFxml(String fxmlName) {
-
-        String fxmlLocation = projectConfigurationProperties.getFxmlLocation();
+        String fxmlLocation = configurationProperties.getFxmlLocation();
         FXMLLoader loader = new FXMLLoader(Objects.requireNonNull(
                 getClass().getResource("/" + fxmlLocation + "/" + fxmlName + ".fxml")
         ));
         loader.setControllerFactory(applicationContext::getBean);
         return loader.load();
+    }
 
+    private void copyProperties(Parent target, Parent source) {
+        target.getChildrenUnmodifiable().addAll(source.getChildrenUnmodifiable());
+        target.setStyle(source.getStyle());
+        target.setId(source.getId());
+        target.getStyleClass().addAll(source.getStyleClass());
     }
 
     private List<String> getFxmlNames() {
         try {
             PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-            Resource[] resources = resolver.getResources("classpath*:" + projectConfigurationProperties.getFxmlLocation() + "/*.fxml");
+            Resource[] resources = resolver.getResources("classpath*:" + configurationProperties.getFxmlLocation() + "/*.fxml");
 
             return Arrays.stream(resources)
                     .map(Resource::getFilename)
                     .filter(Objects::nonNull)
                     .map(name -> name.substring(0, name.length() - 5))
                     .collect(Collectors.toList());
-
         } catch (IOException e) {
             throw new RuntimeException("Failed to scan FXML files", e);
         }
@@ -89,6 +145,12 @@ public class FXMLBeanFactoryPostProcessor implements BeanFactoryPostProcessor, A
     public void setEnvironment(@NonNull Environment environment) {
         BindResult<SpringFXConfigurationProperties> result = Binder.get(environment)
                 .bind("project", SpringFXConfigurationProperties.class);
-        projectConfigurationProperties = result.get();
+        this.configurationProperties = result.get();
     }
+}
+
+interface FXMLAware {
+    String getFxmlName();
+
+    void setFxmlName(String fxmlName);
 }
