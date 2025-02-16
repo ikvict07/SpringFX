@@ -2,7 +2,17 @@ package org.nevertouchgrass.springfx.configuration;
 
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
+import javafx.scene.layout.AnchorPane;
 import lombok.SneakyThrows;
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.implementation.bind.annotation.AllArguments;
+import net.bytebuddy.implementation.bind.annotation.Empty;
+import net.bytebuddy.implementation.bind.annotation.Origin;
+import net.bytebuddy.implementation.bind.annotation.RuntimeType;
+import net.bytebuddy.implementation.bind.annotation.SuperMethod;
+import net.bytebuddy.implementation.bind.annotation.This;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
@@ -12,9 +22,6 @@ import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.bind.BindResult;
 import org.springframework.boot.context.properties.bind.Binder;
-import org.springframework.cglib.proxy.Enhancer;
-import org.springframework.cglib.proxy.MethodInterceptor;
-import org.springframework.cglib.proxy.MethodProxy;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.EnvironmentAware;
@@ -31,6 +38,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static net.bytebuddy.matcher.ElementMatchers.any;
+import static net.bytebuddy.matcher.ElementMatchers.isDeclaredBy;
 import static org.springframework.util.StringUtils.capitalize;
 
 @Component
@@ -46,37 +55,64 @@ public class FXMLBeanFactoryPostProcessor implements BeanFactoryPostProcessor, A
             throw new IllegalStateException("BeanFactory is not a BeanDefinitionRegistry!");
         }
 
-        getFxmlNames().forEach(fxmlName -> {
+        List<String> fxmlNames = getFxmlNames();
+        for (String fxmlName : fxmlNames) {
             try {
                 String className = capitalize(fxmlName) + "Parent";
                 String beanName = fxmlName + "Parent";
 
-                Class<? extends Parent> dynamicClass = createNamedDynamicClass(className);
-
-                BeanDefinition beanDefinition = BeanDefinitionBuilder
-                        .genericBeanDefinition(dynamicClass)
-                        .setScope(BeanDefinition.SCOPE_SINGLETON)
-                        .setInitMethodName("initialize")
-                        .addPropertyValue("fxmlName", fxmlName)
-                        .getBeanDefinition();
+                Class<? extends Parent> dynamicClass = createNamedDynamicClass(className, fxmlName);
+                BeanDefinition beanDefinition = createBeanDefinition(dynamicClass, fxmlName);
 
                 registry.registerBeanDefinition(beanName, beanDefinition);
             } catch (Exception e) {
                 throw new IllegalStateException("Error creating dynamic subclass for " + fxmlName, e);
             }
-        });
+        }
+    }
+
+    private BeanDefinition createBeanDefinition(Class<? extends Parent> dynamicClass, String fxmlName) {
+        return BeanDefinitionBuilder
+                .genericBeanDefinition(dynamicClass)
+                .setScope(BeanDefinition.SCOPE_SINGLETON)
+                .getBeanDefinition();
     }
 
 
-    @SuppressWarnings("unchecked")
-    private Class<? extends Parent> createNamedDynamicClass(String className) {
-        Enhancer enhancer = new Enhancer();
-        enhancer.setSuperclass(Parent.class);
-        enhancer.setUseCache(false);
-        enhancer.setInterfaces(new Class[]{FXMLAware.class});
-        enhancer.setNamingPolicy((prefix, source, key, names) -> className);
+    private Class<? extends Parent> createNamedDynamicClass(String className, String fxmlName) {
+        System.out.println("Creating dynamic class for " + fxmlName);
+        try {
+            Parent root = loadFxml(fxmlName);
+            var rootClass = root.getClass();
+            System.out.println("Root class: " + rootClass);
+            DynamicType.Builder<? extends Parent> dynamicType = new ByteBuddy()
+                    .subclass(rootClass)
+                    .method(any())
+                    .intercept(MethodDelegation.to(new FxmlInterceptor(root)))
+                    .name(className);
 
-        return (Class<? extends Parent>) enhancer.createClass();
+            return dynamicType.make().load(getClass().getClassLoader()).getLoaded();
+        } catch (Exception e) {
+            throw new RuntimeException("Error creating dynamic class", e);
+        }
+    }
+
+    public class FxmlInterceptor {
+        private final Object target;
+
+        public FxmlInterceptor(Object target) {
+            this.target = target;
+        }
+
+        @RuntimeType
+        public Object intercept(@Origin Method method,
+                                @AllArguments Object[] args,
+                                @SuperMethod Method superMethod,
+                                @Empty Object defaultValue
+        ) throws Throwable {
+            method.setAccessible(true);
+            return method.invoke(target, args);
+        }
     }
 
 
@@ -90,12 +126,6 @@ public class FXMLBeanFactoryPostProcessor implements BeanFactoryPostProcessor, A
         return loader.load();
     }
 
-    private void copyProperties(Parent target, Parent source) {
-        target.getChildrenUnmodifiable().addAll(source.getChildrenUnmodifiable());
-        target.setStyle(source.getStyle());
-        target.setId(source.getId());
-        target.getStyleClass().addAll(source.getStyleClass());
-    }
 
     private List<String> getFxmlNames() {
         try {
@@ -123,10 +153,4 @@ public class FXMLBeanFactoryPostProcessor implements BeanFactoryPostProcessor, A
                 .bind("project", SpringFXConfigurationProperties.class);
         this.configurationProperties = result.get();
     }
-}
-
-interface FXMLAware {
-    String getFxmlName();
-
-    void setFxmlName(String fxmlName);
 }

@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "org.nevertouchgrass"
-version = "0.0.6"
+version = "0.0.15"
 
 
 tasks.bootJar {
@@ -64,6 +64,8 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    implementation("net.bytebuddy:byte-buddy-dep:1.17.1")
+
 }
 
 tasks.withType<Test> {
